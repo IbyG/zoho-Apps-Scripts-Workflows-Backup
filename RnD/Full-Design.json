@@ -1,0 +1,281 @@
+{
+    "designVersion": "0.4.0",
+    "app": {
+      "name": "Zoho metadata exporter",
+      "shortDescription": "Paste a shared Zoho browser session, validate once via CRM, then choose which products and data types to export. Receives one downloadable ZIP per system."
+    },
+    "assumptions": {
+      "credentials": "One session (Cookie, CSRF, org) is valid across Zoho CRM, Books, and future apps.",
+      "validationStrategy": {
+        "type": "single-gateway",
+        "canonicalSystem": "crm",
+        "description": "Validate session runs a CRM-only smoke test. On success, the same session is treated as valid for every other Zoho app in the UI without separate per-app checks.",
+        "implementationNote": "Backend intent matches existing crm/testAuth.js; Books-specific probes are not required to gate export."
+      },
+      "downloadPackaging": "One archive per system. All selected export types under that system are bundled into that system's single ZIP.",
+      "scriptPaths": "Known only to the backend job registry; never shown in the client UI."
+    },
+    "layout": {
+      "type": "single-screen",
+      "split": {
+        "direction": "horizontal",
+        "ratioSuggestion": "50-50",
+        "responsiveBehavior": "Stack vertically on narrow viewports: left panel (session) first, then right panel (export selection)."
+      },
+      "regions": [
+        {
+          "id": "left",
+          "title": "Session",
+          "purpose": "Enter shared Zoho session data and validate once."
+        },
+        {
+          "id": "right",
+          "title": "What to download",
+          "purpose": "Choose systems and data types; download yields one ZIP per system that has exportable selections."
+        }
+      ]
+    },
+    "navigation": {
+      "routes": [
+        {
+          "id": "main",
+          "path": "/",
+          "label": "Export"
+        },
+        {
+          "id": "settings",
+          "path": "/settings",
+          "label": "Settings",
+          "purpose": "Customize ZIP file naming patterns per system and other non-secret preferences."
+        }
+      ]
+    },
+    "leftPanel": {
+      "sharedCredentials": {
+        "introCopy": "Use one browser session for all Zoho apps. Validating here uses Zoho CRM to confirm the session; when it succeeds, you can export from CRM, Books, and other apps you select.",
+        "fields": [
+          {
+            "id": "xCrmOrg",
+            "label": "Organization ID",
+            "envKey": "XCRMORG",
+            "control": "text",
+            "required": true,
+            "userVisibleDescription": "Organization identifier from your Zoho session headers."
+          },
+          {
+            "id": "xZcsrfToken",
+            "label": "CSRF token",
+            "envKey": "XZCSRFTOKEN",
+            "control": "password-or-text",
+            "required": true,
+            "userVisibleDescription": "CSRF token from your Zoho session headers."
+          },
+          {
+            "id": "cookie",
+            "label": "Cookie",
+            "envKey": "COOKIE",
+            "control": "textarea",
+            "required": true,
+            "rows": 4,
+            "userVisibleDescription": "Full Cookie header value from the same logged-in browser session."
+          }
+        ]
+      },
+      "validation": {
+        "type": "single",
+        "actions": [
+          {
+            "id": "validate-session",
+            "label": "Validate session",
+            "behavior": "Backend runs the CRM session smoke test with the pasted credentials.",
+            "canonicalCheck": {
+              "systemId": "crm",
+              "userVisibleDescription": "Validation uses Zoho CRM to confirm your session. When it succeeds, we trust it for your other Zoho apps as well."
+            },
+            "onSuccess": {
+              "setState": "sessionValidation.status = success",
+              "userMessage": "Session OK — you can export from the apps and data types you select."
+            },
+            "onFailure": {
+              "setState": "sessionValidation.status = error",
+              "userMessage": "Session could not be verified. Check your headers and that you are logged into Zoho CRM with the same browser session."
+            }
+          }
+        ],
+        "stateModel": {
+          "sessionValidation": {
+            "status": {
+              "enum": ["idle", "loading", "success", "error"]
+            },
+            "validatedAt": {
+              "type": "string",
+              "format": "iso8601",
+              "nullable": true
+            },
+            "message": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      }
+    },
+    "rightPanel": {
+      "selectionModel": {
+        "type": "matrix",
+        "jobKeyPattern": "{{systemId}}:{{jobId}}",
+        "examples": ["crm:functions", "crm:workflows", "books:functions"],
+        "rules": [
+          "User may select any combination of jobs across systems.",
+          "Only jobs with implementation === \"available\" participate in Download.",
+          "Jobs with implementation === \"waitlist\" use waitlist actions only; they do not produce export bytes until available.",
+          "Export produces at most one ZIP per system that has at least one selected available job; that ZIP contains outputs for all selected jobs under that system."
+        ]
+      },
+      "globalControls": [
+        {
+          "id": "selectAllAvailable",
+          "label": "Select all available",
+          "behavior": "Checks every job where implementation === \"available\" across all systems."
+        },
+        {
+          "id": "clearSelection",
+          "label": "Clear selection",
+          "behavior": "Unchecks all available jobs."
+        }
+      ],
+      "systems": [
+        {
+          "id": "crm",
+          "displayName": "Zoho CRM",
+          "jobs": [
+            {
+              "id": "functions",
+              "userLabel": "Functions",
+              "implementation": "available",
+              "backendJobId": "crm_functions"
+            },
+            {
+              "id": "workflows",
+              "userLabel": "Workflows",
+              "implementation": "waitlist",
+              "backendJobId": "crm_workflows",
+              "waitlistBehavior": {
+                "ui": "visible",
+                "primaryControl": "Join waitlist",
+                "secondaryCopy": "Get notified when Workflows export is ready.",
+                "blocksDownload": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "books",
+          "displayName": "Zoho Books",
+          "jobs": [
+            {
+              "id": "functions",
+              "userLabel": "Functions",
+              "implementation": "waitlist",
+              "backendJobId": "books_functions",
+              "waitlistBehavior": {
+                "ui": "visible",
+                "primaryControl": "Join waitlist",
+                "secondaryCopy": "Get notified when Books Functions export is ready.",
+                "blocksDownload": true
+              }
+            },
+            {
+              "id": "workflows",
+              "userLabel": "Workflows",
+              "implementation": "waitlist",
+              "backendJobId": "books_workflows",
+              "waitlistBehavior": {
+                "ui": "visible",
+                "primaryControl": "Join waitlist",
+                "secondaryCopy": "Get notified when Books Workflows export is ready.",
+                "blocksDownload": true
+              }
+            }
+          ]
+        }
+      ],
+      "primaryAction": {
+        "id": "download",
+        "label": "Download",
+        "dependsOn": [
+          "sessionValidation.status === success",
+          "Shared credential fields populated",
+          "At least one selected job with implementation === \"available\""
+        ],
+        "behavior": {
+          "perSystemZip": true,
+          "aggregation": "For each system with one or more selected available jobs, run the corresponding backend exports, then pack into one ZIP for that system.",
+          "zipNaming": {
+            "source": "settings.zipNamePatterns",
+            "fallbackPattern": "{{displayName}}-export-{{date}}.zip",
+            "note": "Final filename patterns are user-customizable on the Settings page; main screen may show a read-only preview."
+          }
+        }
+      }
+    },
+    "settingsPage": {
+      "id": "settings",
+      "title": "Export settings",
+      "sections": [
+        {
+          "id": "zipNames",
+          "title": "ZIP file names",
+          "description": "Customize how downloaded ZIP files are named per system. Supported tokens (e.g. {{date}}, {{displayName}}) are defined by the implementation.",
+          "fields": [
+            {
+              "id": "zipPattern.crm",
+              "label": "Zoho CRM ZIP name",
+              "control": "text",
+              "systemId": "crm",
+              "placeholder": "e.g. my-crm-backup-{{date}}.zip"
+            },
+            {
+              "id": "zipPattern.books",
+              "label": "Zoho Books ZIP name",
+              "control": "text",
+              "systemId": "books",
+              "placeholder": "e.g. my-books-backup-{{date}}.zip"
+            }
+          ]
+        }
+      ],
+      "persistence": {
+        "storage": "implementation-defined",
+        "secretsPolicy": "Never store Cookie, CSRF token, or raw session material in settings; only naming patterns and non-sensitive preferences."
+      }
+    },
+    "developerRegistry": {
+      "description": "Internal mapping from backendJobId to scripts and HTTP details; not exposed in the UI.",
+      "example": [
+        {
+          "backendJobId": "crm_functions",
+          "systemId": "crm",
+          "scriptPath": "crm/fetchAllFunctions.js"
+        }
+      ]
+    },
+    "userVisibleStringsPolicy": {
+      "allowed": [
+        "Product display names (e.g. Zoho CRM, Zoho Books)",
+        "Data type keywords (Functions, Workflows)",
+        "Statuses (Available, Join waitlist)"
+      ],
+      "forbidden": [
+        "Script file paths and filenames",
+        "Internal API URLs unless an explicit advanced or debug mode is added later"
+      ]
+    },
+    "security": {
+      "transport": "HTTPS in production",
+      "clientStorage": "Do not persist session secrets in localStorage by default."
+    },
+    "accessibility": {
+      "checkboxGroups": "Use fieldset/legend per system; support indeterminate state on parent when partially selected."
+    }
+  }
