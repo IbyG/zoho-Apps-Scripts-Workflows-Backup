@@ -40,7 +40,7 @@ export function resolveCrmWebBaseUrlFromCookie(cookie) {
   return DC_CR_WEB[code] ?? 'https://crm.zoho.com';
 }
 
-function resolveZohoApisBaseFromCookie(cookie) {
+export function resolveZohoApisBaseFromCookie(cookie) {
   const code = getDcCode(cookie);
   return DC_ZOHOAPIS[code] ?? 'https://www.zohoapis.com';
 }
@@ -48,7 +48,7 @@ function resolveZohoApisBaseFromCookie(cookie) {
 /**
  * @param {string} orgId numeric org / x-crm-org value
  */
-function candidateFunctionListPaths(orgId) {
+export function candidateFunctionListPaths(orgId) {
   const qPaged = 'type=org&start=1&limit=200';
   return [
     '/crm/v2/settings/functions?type=org',
@@ -75,7 +75,7 @@ export function normalizeCrmCredentials(creds) {
   };
 }
 
-function buildHeaders(normalized) {
+export function buildCrmHeaders(normalized) {
   /** Match a minimal Bruno-style request: Cookie, x-zcsrf-token, x-crm-org, User-Agent. */
   return {
     accept: 'application/json',
@@ -96,11 +96,13 @@ function functionsListSuccess(data) {
 }
 
 /**
- * @param {{ xCrmOrg: string, xZcsrfToken: string, cookie: string }} creds
+ * Resolves the CRM / zohoapis host and returns the first successful functions list payload.
+ *
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
  * @param {{ baseUrl?: string }} [options]
+ * @returns {Promise<{ base: string, data: object }>}
  */
-export async function validateCrmSession(creds, options = {}) {
-  const normalized = normalizeCrmCredentials(creds);
+export async function fetchCrmFunctionsList(normalized, options = {}) {
   const crmWebBase = (
     options.baseUrl || resolveCrmWebBaseUrlFromCookie(normalized.cookie)
   ).replace(/\/$/, '');
@@ -122,7 +124,7 @@ export async function validateCrmSession(creds, options = {}) {
   );
 
   for (const base of uniqueBases) {
-    const headers = buildHeaders(normalized);
+    const headers = buildCrmHeaders(normalized);
     for (const path of paths) {
       const url = `${base.replace(/\/$/, '')}${path}`;
       try {
@@ -154,7 +156,7 @@ export async function validateCrmSession(creds, options = {}) {
         }
 
         if (functionsListSuccess(data)) {
-          return;
+          return { base, data };
         }
 
         const err = new Error('Unexpected response from CRM');
@@ -174,4 +176,13 @@ export async function validateCrmSession(creds, options = {}) {
   }
 
   throw lastErr;
+}
+
+/**
+ * @param {{ xCrmOrg: string, xZcsrfToken: string, cookie: string }} creds
+ * @param {{ baseUrl?: string }} [options]
+ */
+export async function validateCrmSession(creds, options = {}) {
+  const normalized = normalizeCrmCredentials(creds);
+  await fetchCrmFunctionsList(normalized, options);
 }

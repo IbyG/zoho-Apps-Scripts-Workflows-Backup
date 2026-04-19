@@ -5,7 +5,8 @@
   "dependencies": {
     "axios": "^0.21.1",
     "dotenv": "^10.0.0",
-    "js-beautify": "^1.14.0"
+    "js-beautify": "^1.14.0",
+    "jszip": "^3.10.1"
   },
   "scripts": {
     "crm:test:auth": "node crm/testAuth.js",

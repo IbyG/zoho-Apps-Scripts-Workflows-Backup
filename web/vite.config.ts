@@ -7,7 +7,8 @@ import { crmValidateApiPlugin } from "./vite-plugin-crm-validate";
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [react(), crmValidateApiPlugin()],
+  /** CRM API middleware must register before other plugins so `/api/*` is handled reliably. */
+  plugins: [crmValidateApiPlugin(), react()],
   server: {
     fs: {
       allow: [root, path.join(root, "..")],
