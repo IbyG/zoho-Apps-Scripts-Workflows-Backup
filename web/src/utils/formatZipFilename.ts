@@ -11,12 +11,11 @@ export function formatSystemZipFilename(pattern: string, displayName: string): s
 }
 
 /**
- * CRM export ZIP names. Tokens: `{{date}}`, `{{displayName}}`, `{{exportTypes}}`
- * (`exportTypeLabels` joined with `-`, e.g. `Functions-Workflows`).
+ * Per-system export ZIP names (CRM, Books, etc.). Tokens: `{{date}}`, `{{displayName}}`, `{{exportTypes}}`
+ * (`exportTypeLabels` joined with `-`, e.g. `Functions` or `Functions-Workflows`).
  * Default when the pattern is blank: `{{displayName}}-{{exportTypes}}-Export-{{date}}.zip`
- * (e.g. `Zoho CRM-Functions-Workflows-Export-2026-04-19.zip`).
  */
-export function formatCrmExportZipFilename(
+function formatSystemExportZipFilename(
   pattern: string,
   displayName: string,
   exportTypeLabels: string[],
@@ -32,4 +31,22 @@ export function formatCrmExportZipFilename(
         .replace(/\{\{exportTypes\}\}/g, exportTypes)
     : `${displayName}-${exportTypes}-Export-${date}.zip`;
   return /\.zip$/i.test(resolved) ? resolved : `${resolved}.zip`;
+}
+
+/** @see formatSystemExportZipFilename */
+export function formatCrmExportZipFilename(
+  pattern: string,
+  displayName: string,
+  exportTypeLabels: string[],
+): string {
+  return formatSystemExportZipFilename(pattern, displayName, exportTypeLabels);
+}
+
+/** @see formatSystemExportZipFilename */
+export function formatBooksExportZipFilename(
+  pattern: string,
+  displayName: string,
+  exportTypeLabels: string[],
+): string {
+  return formatSystemExportZipFilename(pattern, displayName, exportTypeLabels);
 }

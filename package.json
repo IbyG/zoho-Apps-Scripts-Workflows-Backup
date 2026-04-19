@@ -12,6 +12,7 @@
     "crm:test:auth": "node crm/testAuth.js",
     "crm:functions:fetch": "node crm/fetchAllFunctions.js",
     "crm:workflows:fetch": "node crm/fetchAllWorkflows.js",
-    "crm:backups:fetch": "node crm/fetchBackupFiles.js"
+    "crm:backups:fetch": "node crm/fetchBackupFiles.js",
+    "books:functions:fetch": "node books/fetchAllFunctions.js"
   }
 }

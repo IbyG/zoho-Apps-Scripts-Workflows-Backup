@@ -40,7 +40,7 @@
     },
     "app": {
       "name": "Zoho metadata exporter",
-      "shortDescription": "Paste a shared Zoho browser session, validate once via CRM, then choose which products and data types to export. Receives one downloadable ZIP per system."
+      "shortDescription": "A set of scripts used to work with the unofficial, unpublished, and unsupported Zoho Metadata APIs. Use at your own risk, you have been warned!"
     },
     "assumptions": {
       "credentials": "One session (Cookie, CSRF, org) is valid across Zoho CRM, Books, and future apps.",
@@ -211,14 +211,8 @@
             {
               "id": "functions",
               "userLabel": "Functions",
-              "implementation": "waitlist",
-              "backendJobId": "books_functions",
-              "waitlistBehavior": {
-                "ui": "visible",
-                "primaryControl": "Join waitlist",
-                "secondaryCopy": "Get notified when Books Functions export is ready.",
-                "blocksDownload": true
-              }
+              "implementation": "available",
+              "backendJobId": "books_functions"
             },
             {
               "id": "workflows",
@@ -292,6 +286,11 @@
           "backendJobId": "crm_functions",
           "systemId": "crm",
           "scriptPath": "crm/fetchAllFunctions.js"
+        },
+        {
+          "backendJobId": "books_functions",
+          "systemId": "books",
+          "scriptPath": "books/fetchAllFunctions.js"
         }
       ]
     },

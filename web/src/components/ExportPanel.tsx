@@ -2,24 +2,48 @@ import { useState } from "react";
 import { design, jobKey } from "../design";
 import { useAppState } from "../context/AppStateContext";
 import { cleanseCredentials } from "../utils/cleanseCredentials";
-import { formatCrmExportZipFilename } from "../utils/formatZipFilename";
+import {
+  formatBooksExportZipFilename,
+  formatCrmExportZipFilename,
+} from "../utils/formatZipFilename";
 
 const { globalControls, systems, primaryAction } = design.rightPanel;
 
-const CRM_FUNCTIONS_KEY = jobKey("crm", "functions");
-const CRM_WORKFLOWS_KEY = jobKey("crm", "workflows");
-
-/** Labels for selected CRM exports, in the order they appear in design (stable filename). */
-function selectedCrmExportLabels(selectedKeys: string[]): string[] {
-  const crm = design.rightPanel.systems.find((s) => s.id === "crm");
-  if (!crm) return [];
-  const labels: string[] = [];
-  for (const job of crm.jobs) {
-    if (job.implementation !== "available") continue;
-    const key = jobKey("crm", job.id);
-    if (selectedKeys.includes(key)) labels.push(job.userLabel);
+function buildExportTasks(
+  selectedKeys: Set<string>,
+  zipPatterns: { crm: string; books: string },
+): Array<{ jobKey: string; apiPath: string; zipFilename: string }> {
+  const tasks: Array<{ jobKey: string; apiPath: string; zipFilename: string }> =
+    [];
+  for (const sys of design.rightPanel.systems) {
+    for (const job of sys.jobs) {
+      if (job.implementation !== "available") continue;
+      const key = jobKey(sys.id, job.id);
+      if (!selectedKeys.has(key)) continue;
+      if (sys.id === "crm") {
+        tasks.push({
+          jobKey: key,
+          apiPath: "/api/crm-export",
+          zipFilename: formatCrmExportZipFilename(
+            zipPatterns.crm,
+            sys.displayName,
+            [job.userLabel],
+          ),
+        });
+      } else if (sys.id === "books") {
+        tasks.push({
+          jobKey: key,
+          apiPath: "/api/books-export",
+          zipFilename: formatBooksExportZipFilename(
+            zipPatterns.books,
+            sys.displayName,
+            [job.userLabel],
+          ),
+        });
+      }
+    }
   }
-  return labels;
+  return tasks;
 }
 
 function ChevronIcon() {
@@ -77,42 +101,26 @@ export function ExportPanel() {
   const handleDownload = async () => {
     if (!canDownload || downloading) return;
 
-    const selected = Array.from(selectedJobs);
-    const wantsCrmFunctions = selected.includes(CRM_FUNCTIONS_KEY);
-    const wantsCrmWorkflows = selected.includes(CRM_WORKFLOWS_KEY);
-    if (!wantsCrmFunctions && !wantsCrmWorkflows) {
+    const creds = cleanseCredentials(credentials);
+    const tasks = buildExportTasks(selectedJobs, zipPatterns);
+    if (tasks.length === 0) {
       alert(
-        "Select at least one Zoho CRM export (Functions and/or Workflows). Other products are not available yet.",
+        "Select at least one available export (Zoho CRM and/or Zoho Books).",
       );
       return;
     }
 
-    const creds = cleanseCredentials(credentials);
-    const crmSystem = design.rightPanel.systems.find((s) => s.id === "crm");
-    const displayName = crmSystem?.displayName ?? "Zoho CRM";
-
-    /** One ZIP per selected export type, in stable order (Functions, then Workflows). */
-    const crmKeysToFetch: string[] = [];
-    if (wantsCrmFunctions) crmKeysToFetch.push(CRM_FUNCTIONS_KEY);
-    if (wantsCrmWorkflows) crmKeysToFetch.push(CRM_WORKFLOWS_KEY);
-
     setDownloading(true);
     try {
-      for (let i = 0; i < crmKeysToFetch.length; i++) {
-        const jobKey = crmKeysToFetch[i];
-        const zipFilename = formatCrmExportZipFilename(
-          zipPatterns.crm,
-          displayName,
-          selectedCrmExportLabels([jobKey]),
-        );
-
-        const res = await fetch("/api/crm-export", {
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i];
+        const res = await fetch(t.apiPath, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...creds,
-            selectedJobs: [jobKey],
-            zipFilename,
+            selectedJobs: [t.jobKey],
+            zipFilename: t.zipFilename,
           }),
         });
 
@@ -120,13 +128,18 @@ export function ExportPanel() {
           const text = await res.text();
           if (res.status === 404) {
             alert(
-              "Export API not found (404). Stop the dev server and run `npm run dev` again from the `web` folder so the latest server code (including /api/crm-export) is loaded.",
+              "Export API not found (404). Stop the dev server and run `npm run dev` again from the `web` folder so the latest server code (including /api/crm-export and /api/books-export) is loaded.",
             );
             return;
           }
           let msg = `Export failed (${res.status})`;
           try {
-            const j = JSON.parse(text) as { error?: string; detail?: unknown };
+            const j = JSON.parse(text) as {
+              error?: string;
+              detail?: unknown;
+              booksBaseUrl?: string;
+              crmBaseUrl?: string;
+            };
             if (j.error) msg = j.error;
             if (j.detail != null) {
               const detailStr =
@@ -146,11 +159,11 @@ export function ExportPanel() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = zipFilename;
+        a.download = t.zipFilename;
         a.click();
         URL.revokeObjectURL(url);
 
-        if (i < crmKeysToFetch.length - 1) {
+        if (i < tasks.length - 1) {
           await new Promise((r) => setTimeout(r, 450));
         }
       }

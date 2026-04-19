@@ -1,4 +1,4 @@
-/** Zoho CRM often rejects requests without a real browser User-Agent (see Bruno / Network tab). */
+/** Zoho web apps (CRM, Books, …) often reject requests without a real browser User-Agent (see Bruno / Network tab). */
 export const DEFAULT_CRM_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36';
 
@@ -43,6 +43,26 @@ export function resolveCrmWebBaseUrlFromCookie(cookie) {
 export function resolveZohoApisBaseFromCookie(cookie) {
   const code = getDcCode(cookie);
   return DC_ZOHOAPIS[code] ?? 'https://www.zohoapis.com';
+}
+
+/** Maps CROSSCDNCOUNTRY (from your Cookie header) to the Books web app host. */
+const DC_BOOKS_WEB = {
+  AU: 'https://books.zoho.com.au',
+  EU: 'https://books.zoho.eu',
+  IN: 'https://books.zoho.in',
+  JP: 'https://books.zoho.jp',
+  CN: 'https://books.zoho.com.cn',
+  US: 'https://books.zoho.com',
+  CA: 'https://books.zohocloud.ca',
+};
+
+/**
+ * @param {string} cookie
+ * @returns {string} Web Books origin (e.g. https://books.zoho.com.au)
+ */
+export function resolveBooksWebBaseUrlFromCookie(cookie) {
+  const code = getDcCode(cookie);
+  return DC_BOOKS_WEB[code] ?? 'https://books.zoho.com';
 }
 
 /**
@@ -201,6 +221,94 @@ export async function fetchCrmFunctionsList(normalized, options = {}) {
   }
 
   throw lastErr;
+}
+
+function booksCustomFunctionsListPageSuccess(data) {
+  return (
+    data &&
+    typeof data === 'object' &&
+    data.code === 0 &&
+    Array.isArray(data.customfunctions) &&
+    data.page_context &&
+    typeof data.page_context === 'object'
+  );
+}
+
+const DEFAULT_BOOKS_CUSTOMFUNCTIONS_PER_PAGE = 50;
+
+/**
+ * Paginated Books custom functions list (same session headers as CRM — x-crm-org, x-zcsrf-token, cookie).
+ *
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
+ * @param {{ baseUrl?: string, perPage?: number }} [options]
+ * @returns {Promise<{ base: string, data: { customfunctions: object[] } }>}
+ */
+export async function fetchBooksFunctionsList(normalized, options = {}) {
+  const base = (
+    options.baseUrl || resolveBooksWebBaseUrlFromCookie(normalized.cookie)
+  ).replace(/\/$/, '');
+  const perPage = options.perPage ?? DEFAULT_BOOKS_CUSTOMFUNCTIONS_PER_PAGE;
+
+  /** @type {object[]} */
+  const customfunctions = [];
+  let page = 1;
+
+  while (true) {
+    const q = new URLSearchParams({
+      page: String(page),
+      per_page: String(perPage),
+      filter_by: 'Entity.All',
+      sort_column: 'created_time',
+      sort_order: 'A',
+      usestate: 'false',
+    });
+    const path = `/api/v3/integrations/customfunctions?${q.toString()}`;
+    const attemptUrl = `${base}${path}`;
+    const headers = buildCrmHeaders(normalized);
+
+    try {
+      const res = await fetch(attemptUrl, { method: 'GET', headers });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        const err = new Error(`Books custom functions list failed (${res.status})`);
+        err.detail = data || text;
+        err.booksBaseUrl = base;
+        err.attemptUrl = attemptUrl;
+        throw err;
+      }
+
+      if (!booksCustomFunctionsListPageSuccess(data)) {
+        const err = new Error(
+          data?.message || 'Unexpected response from Books (custom functions list)',
+        );
+        err.detail = data || text;
+        err.booksBaseUrl = base;
+        err.attemptUrl = attemptUrl;
+        throw err;
+      }
+
+      customfunctions.push(...(data.customfunctions || []));
+
+      if (!data.page_context.has_more_page) {
+        return { base, data: { customfunctions } };
+      }
+      page += 1;
+    } catch (e) {
+      const err = /** @type {Error & { detail?: unknown; attemptUrl?: string; booksBaseUrl?: string }} */ (
+        e instanceof Error ? e : new Error(String(e))
+      );
+      err.booksBaseUrl = base;
+      err.attemptUrl = attemptUrl;
+      throw err;
+    }
+  }
 }
 
 /**

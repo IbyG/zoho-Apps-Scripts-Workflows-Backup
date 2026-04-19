@@ -2,6 +2,7 @@ import type { Connect, Plugin } from "vite";
 import { validateCrmSession } from "../crm/validateCrmSession.mjs";
 import { buildCrmFunctionsZipBuffer } from "../crm/fetchAllFunctionsCore.mjs";
 import { buildCrmWorkflowsZipBuffer } from "../crm/fetchAllWorkflowsCore.mjs";
+import { buildBooksFunctionsZipBuffer } from "../books/fetchAllFunctionsCore.mjs";
 
 function readBody(req: Connect.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -16,6 +17,7 @@ function readBody(req: Connect.IncomingMessage): Promise<string> {
 
 const CRM_FUNCTIONS_JOB_KEY = "crm:functions";
 const CRM_WORKFLOWS_JOB_KEY = "crm:workflows";
+const BOOKS_FUNCTIONS_JOB_KEY = "books:functions";
 
 function safeAsciiFilename(name: string): string {
   const s = name.replace(/[^\w.\- ()]+/g, "-").replace(/-+/g, "-").trim();
@@ -29,14 +31,100 @@ export function crmValidateApiPlugin(): Plugin {
     name: "crm-validate-api",
     enforce: "pre",
     configureServer(server) {
+      server.middlewares.use(booksExportHandler);
       server.middlewares.use(crmExportHandler);
       server.middlewares.use(crmValidateHandler);
     },
     configurePreviewServer(server) {
+      server.middlewares.use(booksExportHandler);
       server.middlewares.use(crmExportHandler);
       server.middlewares.use(crmValidateHandler);
     },
   };
+}
+
+async function booksExportHandler(
+  req: Connect.IncomingMessage,
+  res: {
+    statusCode?: number;
+    setHeader(name: string, value: string): void;
+    end(chunk?: string | Buffer): void;
+  },
+  next: Connect.NextFunction,
+): Promise<void> {
+  const pathOnly = req.url?.split("?")[0] ?? "";
+  if (pathOnly !== "/api/books-export" || req.method !== "POST") {
+    next();
+    return;
+  }
+
+  try {
+    const raw = await readBody(req);
+    if (raw.length > 512_000) {
+      res.statusCode = 413;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: "Body too large" }));
+      return;
+    }
+    const body = JSON.parse(raw) as {
+      xCrmOrg?: string;
+      xZcsrfToken?: string;
+      cookie?: string;
+      selectedJobs?: string[];
+      zipFilename?: string;
+    };
+    const selectedJobs = Array.isArray(body.selectedJobs) ? body.selectedJobs : [];
+    const wantsBooksFunctions = selectedJobs.includes(BOOKS_FUNCTIONS_JOB_KEY);
+    if (!wantsBooksFunctions || selectedJobs.length !== 1) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error:
+            "No Zoho Books export was selected. Choose Books → Functions (one ZIP per request).",
+        }),
+      );
+      return;
+    }
+
+    const creds = {
+      xCrmOrg: String(body.xCrmOrg ?? ""),
+      xZcsrfToken: String(body.xZcsrfToken ?? ""),
+      cookie: String(body.cookie ?? ""),
+    };
+    if (!creds.xCrmOrg || !creds.xZcsrfToken || !creds.cookie) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: "Missing session credentials." }));
+      return;
+    }
+
+    const buffer = await buildBooksFunctionsZipBuffer(creds);
+    const filename = safeAsciiFilename(String(body.zipFilename ?? "zoho-books-export.zip"));
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", String(buffer.length));
+    res.end(buffer);
+  } catch (err) {
+    const e = err as Error & {
+      detail?: unknown;
+      attemptUrl?: string;
+      booksBaseUrl?: string;
+    };
+    res.statusCode = 502;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        ok: false,
+        error: e.message || "Export failed",
+        detail: e.detail,
+        booksBaseUrl: e.booksBaseUrl,
+        attemptUrl: e.attemptUrl,
+      }),
+    );
+  }
 }
 
 async function crmExportHandler(
