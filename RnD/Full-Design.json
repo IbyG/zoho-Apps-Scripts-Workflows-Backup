@@ -1,5 +1,43 @@
 {
-    "designVersion": "0.4.0",
+    "designVersion": "0.4.1",
+    "visual": {
+        "aesthetic": {
+            "direction": "Minimalist, Apple Human Interface Guidelines inspired",
+            "mood": "Warm spring daylight — soft, calm, unobtrusive",
+            "paletteNotes": "Cream canvas, peach and sage accents; avoid harsh saturated primaries"
+        },
+        "color": {
+            "canvas": "#F5F1EA",
+            "elevated": "#FFFCF8",
+            "subtleFill": "#EDE8DF",
+            "textPrimary": "#1D1D1F",
+            "textSecondary": "rgba(29, 29, 31, 0.55)",
+            "textTertiary": "rgba(29, 29, 31, 0.38)",
+            "accent": "#C9A962",
+            "accentSecondary": "#8FA090",
+            "accentWarm": "#E5B5A4",
+            "border": "rgba(55, 45, 35, 0.12)",
+            "borderFocus": "rgba(201, 169, 98, 0.45)",
+            "success": "#4F8F6A",
+            "error": "#C44B4B"
+        },
+        "typography": {
+            "fontStack": "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, system-ui, sans-serif",
+            "largeTitlePx": 28,
+            "titlePx": 20,
+            "bodyPx": 15,
+            "captionPx": 12
+        },
+        "radius": {
+            "cardPx": 16,
+            "controlPx": 10,
+            "pill": 999
+        },
+        "shadow": {
+            "elevated": "0 8px 32px rgba(40, 32, 24, 0.07)"
+        },
+        "implementationNote": "web/src/styles/tokens.css mirrors these tokens as CSS custom properties."
+    },
     "app": {
       "name": "Zoho metadata exporter",
       "shortDescription": "Paste a shared Zoho browser session, validate once via CRM, then choose which products and data types to export. Receives one downloadable ZIP per system."
