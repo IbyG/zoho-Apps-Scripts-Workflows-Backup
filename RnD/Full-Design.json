@@ -165,7 +165,7 @@
       "selectionModel": {
         "type": "matrix",
         "jobKeyPattern": "{{systemId}}:{{jobId}}",
-        "examples": ["crm:functions", "crm:workflows", "books:functions"],
+        "examples": ["crm:functions", "crm:workflows", "books:functions", "books:webhooks"],
         "rules": [
           "User may select any combination of jobs across systems.",
           "Only jobs with implementation === \"available\" participate in Download.",
@@ -223,6 +223,18 @@
                 "ui": "visible",
                 "primaryControl": "Join waitlist",
                 "secondaryCopy": "Get notified when Books Workflows export is ready.",
+                "blocksDownload": true
+              }
+            },
+            {
+              "id": "webhooks",
+              "userLabel": "Webhooks",
+              "implementation": "waitlist",
+              "backendJobId": "books_webhooks",
+              "waitlistBehavior": {
+                "ui": "visible",
+                "primaryControl": "Join waitlist",
+                "secondaryCopy": "Get notified when Books Webhooks export is ready.",
                 "blocksDownload": true
               }
             }
