@@ -11,6 +11,7 @@ import {
   jobKey,
   type SessionValidationStatus,
 } from "../design";
+import { cleanseCredentials, cleanseCredentialsPatch } from "../utils/cleanseCredentials";
 
 const STORAGE_ZIP = "exporter.zipPatterns.v1";
 
@@ -23,7 +24,35 @@ export interface Credentials {
 interface SessionValidation {
   status: SessionValidationStatus;
   message: string | null;
+  /** Extra detail from the CRM check (host used, API message); never includes your cookie. */
+  errorHint: string | null;
   validatedAt: string | null;
+}
+
+function formatValidationErrorPayload(text: string): string | null {
+  try {
+    const j = JSON.parse(text) as {
+      crmBaseUrl?: string;
+      attemptUrl?: string;
+      error?: string;
+      detail?: unknown;
+    };
+    const parts: string[] = [];
+    if (j.crmBaseUrl) parts.push(`CRM host: ${j.crmBaseUrl}`);
+    if (j.attemptUrl) parts.push(`Last request: ${j.attemptUrl}`);
+    if (j.detail != null) {
+      parts.push(
+        typeof j.detail === "string"
+          ? j.detail
+          : JSON.stringify(j.detail).slice(0, 400),
+      );
+    } else if (j.error) {
+      parts.push(j.error);
+    }
+    return parts.length > 0 ? parts.join(" — ") : null;
+  } catch {
+    return text.trim() ? text.slice(0, 400) : null;
+  }
 }
 
 interface ZipPatterns {
@@ -85,6 +114,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [sessionValidation, setSessionValidation] = useState<SessionValidation>({
     status: "idle",
     message: null,
+    errorHint: null,
     validatedAt: null,
   });
 
@@ -93,10 +123,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [zipPatterns, setZipPatternsState] = useState<ZipPatterns>(loadZipPatterns);
 
   const setCredentials = useCallback((patch: Partial<Credentials>) => {
-    setCredentialsState((prev) => ({ ...prev, ...patch }));
+    const cleaned = cleanseCredentialsPatch(patch);
+    setCredentialsState((prev) => ({ ...prev, ...cleaned }));
     setSessionValidation({
       status: "idle",
       message: null,
+      errorHint: null,
       validatedAt: null,
     });
   }, []);
@@ -115,33 +147,59 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const validateSession = useCallback(async () => {
     const action = design.leftPanel.validation.actions[0];
-    const filled =
-      credentials.xCrmOrg.trim() &&
-      credentials.xZcsrfToken.trim() &&
-      credentials.cookie.trim();
+    const creds = cleanseCredentials(credentials);
+    setCredentials(creds);
+    const filled = creds.xCrmOrg && creds.xZcsrfToken && creds.cookie;
+
+    if (!filled) {
+      setSessionValidation({
+        status: "error",
+        message: action.onFailure.userMessage,
+        errorHint: null,
+        validatedAt: null,
+      });
+      return;
+    }
 
     setSessionValidation({
       status: "loading",
       message: null,
+      errorHint: null,
       validatedAt: null,
     });
 
-    await new Promise((r) => setTimeout(r, 900));
-
-    if (filled) {
+    try {
+      // Cookie cannot be sent via fetch() from the browser; Vite calls Zoho from Node instead.
+      const res = await fetch("/api/crm-validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creds),
+      });
+      const bodyText = await res.text();
+      if (!res.ok) {
+        setSessionValidation({
+          status: "error",
+          message: action.onFailure.userMessage,
+          errorHint: formatValidationErrorPayload(bodyText),
+          validatedAt: null,
+        });
+        return;
+      }
       setSessionValidation({
         status: "success",
         message: action.onSuccess.userMessage,
+        errorHint: null,
         validatedAt: new Date().toISOString(),
       });
-    } else {
+    } catch {
       setSessionValidation({
         status: "error",
         message: action.onFailure.userMessage,
+        errorHint: "Could not reach the local validation endpoint. Is the dev server running?",
         validatedAt: null,
       });
     }
-  }, [credentials]);
+  }, [credentials, setCredentials]);
 
   const toggleJob = useCallback((key: string, enabled: boolean) => {
     setSelectedJobs((prev) => {

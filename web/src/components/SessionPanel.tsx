@@ -20,9 +20,14 @@ export function SessionPanel() {
 
       {fields.map((f) => (
         <div key={f.id} className="field">
-          <label className="field__label" htmlFor={f.id}>
-            {f.label}
-          </label>
+          <div className="field__heading">
+            <label className="field__label" htmlFor={f.id}>
+              {f.label}
+            </label>
+            <code className="field__wire-name" id={`${f.id}-wire`}>
+              {f.requestHeaderName}
+            </code>
+          </div>
           <span className="field__hint" id={`${f.id}-hint`}>
             {f.userVisibleDescription}
           </span>
@@ -33,7 +38,7 @@ export function SessionPanel() {
               rows={f.rows ?? 4}
               autoComplete="off"
               spellCheck={false}
-              aria-describedby={`${f.id}-hint`}
+              aria-describedby={`${f.id}-wire ${f.id}-hint`}
               value={credentials[f.id as keyof Credentials]}
               onChange={(e) =>
                 setCredentials({
@@ -48,7 +53,7 @@ export function SessionPanel() {
               type={f.control === "password-or-text" ? "password" : "text"}
               autoComplete="off"
               spellCheck={false}
-              aria-describedby={`${f.id}-hint`}
+              aria-describedby={`${f.id}-wire ${f.id}-hint`}
               value={credentials[f.id as keyof Credentials]}
               onChange={(e) =>
                 setCredentials({
@@ -77,6 +82,9 @@ export function SessionPanel() {
           {sessionValidation.status === "loading" && "Checking your session…"}
           {sessionValidation.status === "success" && sessionValidation.message}
           {sessionValidation.status === "error" && sessionValidation.message}
+          {sessionValidation.status === "error" && sessionValidation.errorHint && (
+            <p className="status-banner__hint">{sessionValidation.errorHint}</p>
+          )}
         </div>
       )}
     </section>

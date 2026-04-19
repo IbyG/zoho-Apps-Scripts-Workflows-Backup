@@ -35,6 +35,8 @@ export interface FullDesign {
       fields: Array<{
         id: string;
         label: string;
+        /** HTTP header name as shown in DevTools (Request Headers). */
+        requestHeaderName: string;
         envKey: string;
         control: string;
         required: boolean;

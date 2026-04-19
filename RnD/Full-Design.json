@@ -95,6 +95,7 @@
           {
             "id": "xCrmOrg",
             "label": "Organization ID",
+            "requestHeaderName": "x-crm-org",
             "envKey": "XCRMORG",
             "control": "text",
             "required": true,
@@ -103,6 +104,7 @@
           {
             "id": "xZcsrfToken",
             "label": "CSRF token",
+            "requestHeaderName": "x-zcsrf-token",
             "envKey": "XZCSRFTOKEN",
             "control": "password-or-text",
             "required": true,
@@ -111,6 +113,7 @@
           {
             "id": "cookie",
             "label": "Cookie",
+            "requestHeaderName": "Cookie",
             "envKey": "COOKIE",
             "control": "textarea",
             "required": true,
