@@ -1,6 +1,7 @@
 import type { Connect, Plugin } from "vite";
 import { validateCrmSession } from "../crm/validateCrmSession.mjs";
 import { buildCrmFunctionsZipBuffer } from "../crm/fetchAllFunctionsCore.mjs";
+import { buildCrmWorkflowsZipBuffer } from "../crm/fetchAllWorkflowsCore.mjs";
 
 function readBody(req: Connect.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -14,10 +15,11 @@ function readBody(req: Connect.IncomingMessage): Promise<string> {
 }
 
 const CRM_FUNCTIONS_JOB_KEY = "crm:functions";
+const CRM_WORKFLOWS_JOB_KEY = "crm:workflows";
 
 function safeAsciiFilename(name: string): string {
   const s = name.replace(/[^\w.\- ()]+/g, "-").replace(/-+/g, "-").trim();
-  const base = s.slice(0, 180) || "zoho-crm-functions";
+  const base = s.slice(0, 180) || "zoho-crm-export";
   return /\.zip$/i.test(base) ? base : `${base}.zip`;
 }
 
@@ -27,17 +29,17 @@ export function crmValidateApiPlugin(): Plugin {
     name: "crm-validate-api",
     enforce: "pre",
     configureServer(server) {
-      server.middlewares.use(crmExportFunctionsHandler);
+      server.middlewares.use(crmExportHandler);
       server.middlewares.use(crmValidateHandler);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(crmExportFunctionsHandler);
+      server.middlewares.use(crmExportHandler);
       server.middlewares.use(crmValidateHandler);
     },
   };
 }
 
-async function crmExportFunctionsHandler(
+async function crmExportHandler(
   req: Connect.IncomingMessage,
   res: {
     statusCode?: number;
@@ -47,7 +49,9 @@ async function crmExportFunctionsHandler(
   next: Connect.NextFunction,
 ): Promise<void> {
   const pathOnly = req.url?.split("?")[0] ?? "";
-  if (pathOnly !== "/api/crm-export-functions" || req.method !== "POST") {
+  const isCrmExport =
+    pathOnly === "/api/crm-export" || pathOnly === "/api/crm-export-functions";
+  if (!isCrmExport || req.method !== "POST") {
     next();
     return;
   }
@@ -68,13 +72,29 @@ async function crmExportFunctionsHandler(
       zipFilename?: string;
     };
     const selectedJobs = Array.isArray(body.selectedJobs) ? body.selectedJobs : [];
-    if (!selectedJobs.includes(CRM_FUNCTIONS_JOB_KEY)) {
+    const wantsFunctions = selectedJobs.includes(CRM_FUNCTIONS_JOB_KEY);
+    const wantsWorkflows = selectedJobs.includes(CRM_WORKFLOWS_JOB_KEY);
+    if (!wantsFunctions && !wantsWorkflows) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
       res.end(
         JSON.stringify({
           ok: false,
-          error: "CRM Functions export was not selected.",
+          error:
+            "No Zoho CRM export was selected. Choose Functions and/or Workflows.",
+        }),
+      );
+      return;
+    }
+
+    if (wantsFunctions && wantsWorkflows) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error:
+            "Send one CRM export type per request (separate ZIP per checkbox).",
         }),
       );
       return;
@@ -92,8 +112,10 @@ async function crmExportFunctionsHandler(
       return;
     }
 
-    const buffer = await buildCrmFunctionsZipBuffer(creds);
-    const filename = safeAsciiFilename(String(body.zipFilename ?? "zoho-crm-functions.zip"));
+    const buffer = wantsFunctions
+      ? await buildCrmFunctionsZipBuffer(creds)
+      : await buildCrmWorkflowsZipBuffer(creds);
+    const filename = safeAsciiFilename(String(body.zipFilename ?? "zoho-crm-export.zip"));
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

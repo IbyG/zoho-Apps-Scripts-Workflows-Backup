@@ -199,14 +199,8 @@
             {
               "id": "workflows",
               "userLabel": "Workflows",
-              "implementation": "waitlist",
-              "backendJobId": "crm_workflows",
-              "waitlistBehavior": {
-                "ui": "visible",
-                "primaryControl": "Join waitlist",
-                "secondaryCopy": "Get notified when Workflows export is ready.",
-                "blocksDownload": true
-              }
+              "implementation": "available",
+              "backendJobId": "crm_workflows"
             }
           ]
         },
@@ -251,10 +245,10 @@
         ],
         "behavior": {
           "perSystemZip": true,
-          "aggregation": "For each system with one or more selected available jobs, run the corresponding backend exports, then pack into one ZIP for that system.",
+          "aggregation": "For each selected available export type, run the corresponding backend export and download a separate ZIP file (one per checkbox).",
           "zipNaming": {
             "source": "settings.zipNamePatterns",
-            "fallbackPattern": "{{displayName}}-export-{{date}}.zip",
+            "fallbackPattern": "{{displayName}}-{{exportTypes}}-Export-{{date}}.zip",
             "note": "Final filename patterns are user-customizable on the Settings page; main screen may show a read-only preview."
           }
         }
@@ -267,14 +261,14 @@
         {
           "id": "zipNames",
           "title": "ZIP file names",
-          "description": "Customize how downloaded ZIP files are named per system. Supported tokens (e.g. {{date}}, {{displayName}}) are defined by the implementation.",
+          "description": "Customize how downloaded ZIP files are named per system. For Zoho CRM, each export downloads separately; tokens include {{date}}, {{displayName}}, and {{exportTypes}} (one type per file, e.g. Functions or Workflows).",
           "fields": [
             {
               "id": "zipPattern.crm",
               "label": "Zoho CRM ZIP name",
               "control": "text",
               "systemId": "crm",
-              "placeholder": "e.g. my-crm-backup-{{date}}.zip"
+              "placeholder": "e.g. {{displayName}}-{{exportTypes}}-Export-{{date}}.zip"
             },
             {
               "id": "zipPattern.books",

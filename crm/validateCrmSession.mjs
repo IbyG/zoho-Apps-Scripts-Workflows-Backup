@@ -59,6 +59,31 @@ export function candidateFunctionListPaths(orgId) {
   ];
 }
 
+/** Default page size for workflow rules list (v8 automation API). */
+export const DEFAULT_WORKFLOW_RULES_PER_PAGE = 200;
+
+/**
+ * @param {string} orgId
+ * @param {number} page
+ * @param {number} perPage
+ */
+export function candidateWorkflowRulesListPaths(orgId, page, perPage) {
+  const q = `page=${page}&per_page=${perPage}`;
+  return [
+    `/crm/v8/settings/automation/workflow_rules?${q}`,
+    `/crm/org${orgId}/v8/settings/automation/workflow_rules?${q}`,
+  ];
+}
+
+function workflowRulesListSuccess(data) {
+  return (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray(data.workflow_rules) &&
+    data.status !== 'error'
+  );
+}
+
 /**
  * @param {{ xCrmOrg: string, xZcsrfToken: string, cookie: string }} creds
  */
@@ -176,6 +201,171 @@ export async function fetchCrmFunctionsList(normalized, options = {}) {
   }
 
   throw lastErr;
+}
+
+/**
+ * Fetches one page of workflow rules (v8 settings API).
+ *
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
+ * @param {number} page
+ * @param {number} perPage
+ * @param {{ baseUrl?: string, base?: string, pathIndex?: number }} [options]
+ *   When `base` is set (CRM origin from a prior successful page), only that host is used.
+ *   Use `pathIndex` (0 or 1) to match the list URL shape from the first successful page.
+ * @returns {Promise<{ base: string, data: object, pathIndex: number }>}
+ */
+export async function fetchCrmWorkflowRulesPage(
+  normalized,
+  page,
+  perPage,
+  options = {},
+) {
+  const orgId = normalized.xCrmOrg;
+  const paths = candidateWorkflowRulesListPaths(orgId, page, perPage);
+  const lockedPathIndex =
+    typeof options.pathIndex === 'number' ? options.pathIndex : 0;
+
+  if (options.base) {
+    const base = options.base.replace(/\/$/, '');
+    const headers = buildCrmHeaders(normalized);
+    const path = paths[lockedPathIndex] ?? paths[0];
+    const url = `${base}${path}`;
+    const res = await fetch(url, { method: 'GET', headers });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+    if (!res.ok) {
+      const err = new Error(`Workflow rules request failed (${res.status})`);
+      err.detail = data || text;
+      err.crmBaseUrl = base;
+      err.attemptUrl = url;
+      throw err;
+    }
+    if (data && data.status === 'error') {
+      const err = new Error(data.message || 'API returned status error');
+      err.detail = data;
+      err.crmBaseUrl = base;
+      err.attemptUrl = url;
+      throw err;
+    }
+    if (!workflowRulesListSuccess(data)) {
+      const err = new Error('Unexpected response from CRM (workflow rules)');
+      err.detail = data || text;
+      err.crmBaseUrl = base;
+      err.attemptUrl = url;
+      throw err;
+    }
+    return { base, data, pathIndex: lockedPathIndex };
+  }
+
+  const crmWebBase = (
+    options.baseUrl || resolveCrmWebBaseUrlFromCookie(normalized.cookie)
+  ).replace(/\/$/, '');
+  const apisBase = resolveZohoApisBaseFromCookie(normalized.cookie).replace(
+    /\/$/,
+    '',
+  );
+  const uniqueBases = options.baseUrl
+    ? [crmWebBase]
+    : [...new Set([crmWebBase, apisBase])];
+
+  let lastErr = /** @type {Error & { detail?: unknown; crmBaseUrl?: string }} */ (
+    new Error('No workflow rules fetch attempts')
+  );
+
+  for (const base of uniqueBases) {
+    const headers = buildCrmHeaders(normalized);
+    for (const path of paths) {
+      const url = `${base.replace(/\/$/, '')}${path}`;
+      try {
+        const res = await fetch(url, { method: 'GET', headers });
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = null;
+        }
+
+        if (!res.ok) {
+          const err = new Error(`Authentication Failed (${res.status})`);
+          err.detail = data || text;
+          err.crmBaseUrl = base;
+          err.attemptUrl = url;
+          lastErr = err;
+          continue;
+        }
+
+        if (data && data.status === 'error') {
+          const err = new Error(data.message || 'API returned status error');
+          err.detail = data;
+          err.crmBaseUrl = base;
+          err.attemptUrl = url;
+          lastErr = err;
+          continue;
+        }
+
+        if (workflowRulesListSuccess(data)) {
+          const pathIndex = paths.indexOf(path);
+          return { base, data, pathIndex: pathIndex >= 0 ? pathIndex : 0 };
+        }
+
+        const err = new Error('Unexpected response from CRM');
+        err.detail = data || text;
+        err.crmBaseUrl = base;
+        err.attemptUrl = url;
+        lastErr = err;
+      } catch (e) {
+        const err = /** @type {Error & { detail?: unknown; attemptUrl?: string }} */ (
+          e instanceof Error ? e : new Error(String(e))
+        );
+        err.crmBaseUrl = base;
+        err.attemptUrl = `${base.replace(/\/$/, '')}${path}`;
+        lastErr = err;
+      }
+    }
+  }
+
+  throw lastErr;
+}
+
+/**
+ * Walks all pages and returns every workflow rule row.
+ *
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
+ * @param {{ baseUrl?: string, perPage?: number }} [options]
+ * @returns {Promise<{ base: string, workflow_rules: object[], info?: object }>}
+ */
+export async function fetchAllCrmWorkflowRules(normalized, options = {}) {
+  const perPage = options.perPage ?? DEFAULT_WORKFLOW_RULES_PER_PAGE;
+  let base;
+  /** @type {number | undefined} */
+  let pathIndex;
+  let page = 1;
+  /** @type {object[]} */
+  const workflow_rules = [];
+  let lastInfo;
+
+  while (true) {
+    const { base: resolvedBase, data, pathIndex: resolvedPathIndex } =
+      await fetchCrmWorkflowRulesPage(normalized, page, perPage, {
+        ...options,
+        base,
+        pathIndex: base != null ? pathIndex : undefined,
+      });
+    base = resolvedBase;
+    if (pathIndex === undefined) pathIndex = resolvedPathIndex;
+    lastInfo = data.info;
+    workflow_rules.push(...(data.workflow_rules || []));
+    if (!data.info?.more_records) break;
+    page += 1;
+  }
+
+  return { base, workflow_rules, info: lastInfo };
 }
 
 /**

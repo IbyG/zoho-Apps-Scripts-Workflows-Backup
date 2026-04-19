@@ -2,11 +2,25 @@ import { useState } from "react";
 import { design, jobKey } from "../design";
 import { useAppState } from "../context/AppStateContext";
 import { cleanseCredentials } from "../utils/cleanseCredentials";
-import { formatSystemZipFilename } from "../utils/formatZipFilename";
+import { formatCrmExportZipFilename } from "../utils/formatZipFilename";
 
 const { globalControls, systems, primaryAction } = design.rightPanel;
 
 const CRM_FUNCTIONS_KEY = jobKey("crm", "functions");
+const CRM_WORKFLOWS_KEY = jobKey("crm", "workflows");
+
+/** Labels for selected CRM exports, in the order they appear in design (stable filename). */
+function selectedCrmExportLabels(selectedKeys: string[]): string[] {
+  const crm = design.rightPanel.systems.find((s) => s.id === "crm");
+  if (!crm) return [];
+  const labels: string[] = [];
+  for (const job of crm.jobs) {
+    if (job.implementation !== "available") continue;
+    const key = jobKey("crm", job.id);
+    if (selectedKeys.includes(key)) labels.push(job.userLabel);
+  }
+  return labels;
+}
 
 function ChevronIcon() {
   return (
@@ -64,61 +78,82 @@ export function ExportPanel() {
     if (!canDownload || downloading) return;
 
     const selected = Array.from(selectedJobs);
-    if (!selected.includes(CRM_FUNCTIONS_KEY)) {
-      alert("Select Zoho CRM → Functions to download (other export types are not available yet).");
+    const wantsCrmFunctions = selected.includes(CRM_FUNCTIONS_KEY);
+    const wantsCrmWorkflows = selected.includes(CRM_WORKFLOWS_KEY);
+    if (!wantsCrmFunctions && !wantsCrmWorkflows) {
+      alert(
+        "Select at least one Zoho CRM export (Functions and/or Workflows). Other products are not available yet.",
+      );
       return;
     }
 
     const creds = cleanseCredentials(credentials);
     const crmSystem = design.rightPanel.systems.find((s) => s.id === "crm");
     const displayName = crmSystem?.displayName ?? "Zoho CRM";
-    const zipFilename = formatSystemZipFilename(zipPatterns.crm, displayName);
+
+    /** One ZIP per selected export type, in stable order (Functions, then Workflows). */
+    const crmKeysToFetch: string[] = [];
+    if (wantsCrmFunctions) crmKeysToFetch.push(CRM_FUNCTIONS_KEY);
+    if (wantsCrmWorkflows) crmKeysToFetch.push(CRM_WORKFLOWS_KEY);
 
     setDownloading(true);
     try {
-      const res = await fetch("/api/crm-export-functions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...creds,
-          selectedJobs: selected,
-          zipFilename,
-        }),
-      });
+      for (let i = 0; i < crmKeysToFetch.length; i++) {
+        const jobKey = crmKeysToFetch[i];
+        const zipFilename = formatCrmExportZipFilename(
+          zipPatterns.crm,
+          displayName,
+          selectedCrmExportLabels([jobKey]),
+        );
 
-      if (!res.ok) {
-        const text = await res.text();
-        if (res.status === 404) {
-          alert(
-            "Export API not found (404). Stop the dev server and run `npm run dev` again from the `web` folder so the latest server code (including /api/crm-export-functions) is loaded.",
-          );
+        const res = await fetch("/api/crm-export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...creds,
+            selectedJobs: [jobKey],
+            zipFilename,
+          }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          if (res.status === 404) {
+            alert(
+              "Export API not found (404). Stop the dev server and run `npm run dev` again from the `web` folder so the latest server code (including /api/crm-export) is loaded.",
+            );
+            return;
+          }
+          let msg = `Export failed (${res.status})`;
+          try {
+            const j = JSON.parse(text) as { error?: string; detail?: unknown };
+            if (j.error) msg = j.error;
+            if (j.detail != null) {
+              const detailStr =
+                typeof j.detail === "string"
+                  ? j.detail
+                  : JSON.stringify(j.detail).slice(0, 400);
+              msg = `${msg} — ${detailStr}`;
+            }
+          } catch {
+            if (text.trim()) msg = text.slice(0, 500);
+          }
+          alert(msg);
           return;
         }
-        let msg = `Export failed (${res.status})`;
-        try {
-          const j = JSON.parse(text) as { error?: string; detail?: unknown };
-          if (j.error) msg = j.error;
-          if (j.detail != null) {
-            const detailStr =
-              typeof j.detail === "string"
-                ? j.detail
-                : JSON.stringify(j.detail).slice(0, 400);
-            msg = `${msg} — ${detailStr}`;
-          }
-        } catch {
-          if (text.trim()) msg = text.slice(0, 500);
-        }
-        alert(msg);
-        return;
-      }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = zipFilename;
-      a.click();
-      URL.revokeObjectURL(url);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = zipFilename;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        if (i < crmKeysToFetch.length - 1) {
+          await new Promise((r) => setTimeout(r, 450));
+        }
+      }
     } catch {
       alert(
         "Could not download the ZIP. Check that the dev server is running and try again.",
@@ -134,8 +169,8 @@ export function ExportPanel() {
         What to download
       </h2>
       <p className="panel__sub">
-        Choose products and data types. Each system produces a single ZIP that
-        bundles everything you select for that product.
+        Choose products and data types. Each selected export downloads as its own
+        ZIP file.
       </p>
 
       <div className="toolbar">
@@ -202,7 +237,7 @@ export function ExportPanel() {
                             <>
                               <span
                                 className="pill-tag pill-tag--ok"
-                                title="Included in ZIP when selected"
+                                title="Downloads as its own ZIP when selected"
                               >
                                 Available
                               </span>
@@ -232,7 +267,7 @@ export function ExportPanel() {
         <p className="download-bar__note">
           {!sessionReady
             ? "Validate your session to enable download. You can choose exports anytime."
-            : "Download runs one job per system; only available export types are included."}
+            : "Each selected export type triggers a separate ZIP download."}
         </p>
         <button
           type="button"
