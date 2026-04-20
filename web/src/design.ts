@@ -1,4 +1,4 @@
-import raw from "../../RnD/Full-Design.json";
+import raw from "../Full-Design.json";
 
 export type SessionValidationStatus = "idle" | "loading" | "success" | "error";
 

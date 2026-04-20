@@ -5,7 +5,7 @@ This document describes what you must change in the codebase when you add anothe
 ## Concepts
 
 - **Job key:** Every selectable row is identified by `{{systemId}}:{{jobId}}`, for example `books:webhooks`. The UI builds this with `jobKey(systemId, jobId)` in `web/src/design.ts`.
-- **Single source of truth for the grid:** `RnD/Full-Design.json` → imported as `design` in `web/src/design.ts`. The export screen reads `design.rightPanel.systems[]` and renders one row per `jobs[]` entry.
+- **Single source of truth for the grid:** `web/Full-Design.json` → imported as `design` in `web/src/design.ts`. The export screen reads `design.rightPanel.systems[]` and renders one row per `jobs[]` entry.
 - **Implementation drives behavior:**
   - `"available"` — checkbox, **Available** badge, included in **Select all available**, and eligible for Download (if session is valid).
   - `"waitlist"` — no checkbox; shows **In Development** (peach badge). Not downloaded until you switch it to `"available"` and wire the backend.
@@ -18,7 +18,7 @@ Types for jobs live in `web/src/design.ts` (`DesignJob`, `JobImplementation`). K
 
 Use this when the product name should appear in the app but there is no export script yet.
 
-### 1. Edit `RnD/Full-Design.json`
+### 1. Edit `web/Full-Design.json`
 
 1. Under the correct product in `rightPanel.systems`, add an object to `jobs` (sibling order controls display order).
 
@@ -53,7 +53,7 @@ From the `web/` directory: `npm run build`.
 
 Use this when users should be able to download data for the new type.
 
-### 1. Edit `RnD/Full-Design.json`
+### 1. Edit `web/Full-Design.json`
 
 1. Add or change the job under the right `rightPanel.systems[]` entry.
 2. Set `"implementation": "available"`.
@@ -83,7 +83,7 @@ Keep error messages accurate when no valid job is selected.
 - `ExportPanel` → `buildExportTasks` routes CRM jobs to `/api/crm-export` and Books jobs to `/api/books-export` based on `sys.id`. No change is needed for a **new job under an existing system** (`crm` or `books`).
 - ZIP names use `formatCrmExportZipFilename` / `formatBooksExportZipFilename` in `web/src/utils/formatZipFilename.ts`, with `job.userLabel` passed through from the selected job. New available jobs automatically affect `{{exportTypes}}` in the pattern when that job is selected.
 
-### 5. Optional documentation in `RnD/Full-Design.json`
+### 5. Optional documentation in `web/Full-Design.json`
 
 You can add an entry under `developerRegistry.example` describing `backendJobId` → script path. This is not read by the app; it is for maintainers only.
 
@@ -100,7 +100,7 @@ If you introduce a **new** `systems[]` entry (new `id`, e.g. `inventory`), you m
 
 1. **`web/src/components/ExportPanel.tsx`** — In `buildExportTasks`, add a branch for the new `sys.id` with the correct `/api/...` path and zip filename helper (you may need a new `format*ExportZipFilename` or reuse `formatSystemExportZipFilename` with a new settings pattern).
 2. **`web/vite-plugin-crm-validate.ts`** — Register a new middleware handler for the new API route, or extend an existing handler in a clear, documented way.
-3. **`RnD/Full-Design.json` → `settingsPage`** — Add a ZIP name field for the new system if users should customize names (mirror `zipPattern.crm` / `zipPattern.books`).
+3. **`web/Full-Design.json` → `settingsPage`** — Add a ZIP name field for the new system if users should customize names (mirror `zipPattern.crm` / `zipPattern.books`).
 4. **`web/src/context/AppStateContext.tsx`** — Extend stored `zipPatterns` and `SettingsPage.tsx` inputs if you add new pattern fields.
 
 This is substantially more work than adding a job under CRM or Books alone.
@@ -121,7 +121,7 @@ This is substantially more work than adding a job under CRM or Books alone.
 
 | Area | File(s) |
 |------|---------|
-| Grid labels and job definitions | `RnD/Full-Design.json` |
+| Grid labels and job definitions | `web/Full-Design.json` |
 | TypeScript types for `design` | `web/src/design.ts` |
 | Export UI | `web/src/components/ExportPanel.tsx` |
 | Selection state | `web/src/context/AppStateContext.tsx` |

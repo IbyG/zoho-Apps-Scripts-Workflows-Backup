@@ -1,5 +1,5 @@
 /**
- * Mirrors RnD/Full-Design.json → visual.color (keep in sync when tokens change).
+ * Mirrors web/Full-Design.json → visual.color (keep in sync when tokens change).
  */
 :root {
   --color-canvas: #f5f1ea;
