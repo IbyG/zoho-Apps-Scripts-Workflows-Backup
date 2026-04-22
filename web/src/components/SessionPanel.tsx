@@ -137,7 +137,6 @@ export function SessionPanel() {
             >
               {sessionValidation.status === "loading" &&
                 "Checking your session…"}
-              {sessionValidation.status === "success" && sessionValidation.message}
               {sessionValidation.status === "error" && sessionValidation.message}
               {sessionValidation.status === "error" && sessionValidation.errorHint && (
                 <p className="mt-2 break-words text-xs text-slate-600">

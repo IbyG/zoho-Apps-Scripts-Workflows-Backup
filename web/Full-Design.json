@@ -189,6 +189,7 @@
         {
           "id": "crm",
           "displayName": "Zoho CRM",
+          "iconPath": "/icons/crm.svg",
           "jobs": [
             {
               "id": "functions",
@@ -207,6 +208,7 @@
         {
           "id": "books",
           "displayName": "Zoho Books",
+          "iconPath": "/icons/books.svg",
           "jobs": [
             {
               "id": "functions",

@@ -20,6 +20,8 @@ export interface DesignJob {
 export interface DesignSystem {
   id: string;
   displayName: string;
+  /** Optional icon URL from /public (example: "/icons/crm.svg"). */
+  iconPath?: string;
   jobs: DesignJob[];
 }
 

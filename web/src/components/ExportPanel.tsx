@@ -74,6 +74,9 @@ export function ExportPanel() {
   } = useAppState();
 
   const [downloading, setDownloading] = useState(false);
+  const [failedCustomIcons, setFailedCustomIcons] = useState<Set<string>>(
+    () => new Set(),
+  );
   const sessionReady = sessionValidation.status === "success";
 
   const handleDownload = async () => {
@@ -199,13 +202,28 @@ export function ExportPanel() {
               >
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-50 text-primary">
-                    <span
-                      className="material-symbols-outlined text-2xl"
-                      style={{ fontVariationSettings: "'FILL' 1" }}
-                      aria-hidden
-                    >
-                      {systemIconFor(sys.id)}
-                    </span>
+                    {sys.iconPath && !failedCustomIcons.has(sys.id) ? (
+                      <img
+                        src={sys.iconPath}
+                        alt={`${systemCardTitle(sys.displayName)} icon`}
+                        className="h-7 w-7 object-contain"
+                        onError={() =>
+                          setFailedCustomIcons((prev) => {
+                            const next = new Set(prev);
+                            next.add(sys.id);
+                            return next;
+                          })
+                        }
+                      />
+                    ) : (
+                      <span
+                        className="material-symbols-outlined text-2xl"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                        aria-hidden
+                      >
+                        {systemIconFor(sys.id)}
+                      </span>
+                    )}
                   </div>
                   <h4 className="font-headline text-lg font-bold text-slate-900">
                     {systemCardTitle(sys.displayName)}
