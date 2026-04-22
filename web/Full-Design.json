@@ -36,10 +36,10 @@
         "shadow": {
             "elevated": "0 8px 32px rgba(40, 32, 24, 0.07)"
         },
-        "implementationNote": "web/src/styles/tokens.css mirrors these tokens as CSS custom properties."
+        "implementationNote": "The web app theme is implemented in web/tailwind.config.cjs (colors match this palette conceptually; production UI is Tailwind-based)."
     },
     "app": {
-      "name": "Zoho metadata exporter",
+      "name": "Metadata Exporter",
       "shortDescription": "A set of scripts used to work with the unofficial, unpublished, and unsupported Zoho Metadata APIs. Use at your own risk, you have been warned!"
     },
     "assumptions": {
@@ -90,7 +90,7 @@
     },
     "leftPanel": {
       "sharedCredentials": {
-        "introCopy": "Use one browser session for all Zoho apps. Validating here uses Zoho CRM to confirm the session; when it succeeds, you can export from CRM, Books, and other apps you select.",
+        "introCopy": "Establish a secure connection with the target environment to begin extracting structural metadata. Active sessions expire after 60 minutes of inactivity.",
         "fields": [
           {
             "id": "xCrmOrg",
@@ -127,7 +127,7 @@
         "actions": [
           {
             "id": "validate-session",
-            "label": "Validate session",
+            "label": "Validate Session",
             "behavior": "Backend runs the CRM session smoke test with the pasted credentials.",
             "canonicalCheck": {
               "systemId": "crm",
@@ -176,12 +176,12 @@
       "globalControls": [
         {
           "id": "selectAllAvailable",
-          "label": "Select all available",
+          "label": "Select All Available",
           "behavior": "Checks every job where implementation === \"available\" across all systems."
         },
         {
           "id": "clearSelection",
-          "label": "Clear selection",
+          "label": "Clear Selection",
           "behavior": "Unchecks all available jobs."
         }
       ],
@@ -243,7 +243,7 @@
       ],
       "primaryAction": {
         "id": "download",
-        "label": "Download",
+        "label": "Export",
         "dependsOn": [
           "sessionValidation.status === success",
           "Shared credential fields populated",
