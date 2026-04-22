@@ -2,6 +2,7 @@ import type { Connect, Plugin } from "vite";
 import { validateCrmSession } from "../crm/validateCrmSession.mjs";
 import { buildCrmFunctionsZipBuffer } from "../crm/fetchAllFunctionsCore.mjs";
 import { buildCrmWorkflowsZipBuffer } from "../crm/fetchAllWorkflowsCore.mjs";
+import { buildCrmSchedulesZipBuffer } from "../crm/fetchallschedulescore.mjs";
 import { buildBooksFunctionsZipBuffer } from "../books/fetchAllFunctionsCore.mjs";
 
 function readBody(req: Connect.IncomingMessage): Promise<string> {
@@ -17,6 +18,7 @@ function readBody(req: Connect.IncomingMessage): Promise<string> {
 
 const CRM_FUNCTIONS_JOB_KEY = "crm:functions";
 const CRM_WORKFLOWS_JOB_KEY = "crm:workflows";
+const CRM_SCHEDULES_JOB_KEY = "crm:schedules";
 const BOOKS_FUNCTIONS_JOB_KEY = "books:functions";
 
 function safeAsciiFilename(name: string): string {
@@ -162,20 +164,26 @@ async function crmExportHandler(
     const selectedJobs = Array.isArray(body.selectedJobs) ? body.selectedJobs : [];
     const wantsFunctions = selectedJobs.includes(CRM_FUNCTIONS_JOB_KEY);
     const wantsWorkflows = selectedJobs.includes(CRM_WORKFLOWS_JOB_KEY);
-    if (!wantsFunctions && !wantsWorkflows) {
+    const wantsSchedules = selectedJobs.includes(CRM_SCHEDULES_JOB_KEY);
+    if (!wantsFunctions && !wantsWorkflows && !wantsSchedules) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
       res.end(
         JSON.stringify({
           ok: false,
           error:
-            "No Zoho CRM export was selected. Choose Functions and/or Workflows.",
+            "No Zoho CRM export was selected. Choose Functions, Workflows, and/or Schedules.",
         }),
       );
       return;
     }
 
-    if (wantsFunctions && wantsWorkflows) {
+    const selectedCrmTypes = [
+      wantsFunctions,
+      wantsWorkflows,
+      wantsSchedules,
+    ].filter(Boolean).length;
+    if (selectedCrmTypes > 1) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
       res.end(
@@ -202,7 +210,9 @@ async function crmExportHandler(
 
     const buffer = wantsFunctions
       ? await buildCrmFunctionsZipBuffer(creds)
-      : await buildCrmWorkflowsZipBuffer(creds);
+      : wantsWorkflows
+        ? await buildCrmWorkflowsZipBuffer(creds)
+        : await buildCrmSchedulesZipBuffer(creds);
     const filename = safeAsciiFilename(String(body.zipFilename ?? "zoho-crm-export.zip"));
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/zip");
