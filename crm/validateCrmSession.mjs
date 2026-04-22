@@ -13,18 +13,6 @@ const DC_CR_WEB = {
   CA: 'https://crm.zohocloud.ca',
 };
 
-/** Public API host for the same DC (used as fallback when crm.* returns INVALID_REQUEST). */
-const DC_ZOHOAPIS = {
-  AU: 'https://www.zohoapis.com.au',
-  EU: 'https://www.zohoapis.eu',
-  IN: 'https://www.zohoapis.in',
-  JP: 'https://www.zohoapis.jp',
-  CN: 'https://www.zohoapis.com.cn',
-  US: 'https://www.zohoapis.com',
-  // CA DC: use US API host unless Zoho documents a dedicated zohoapis CA domain.
-  CA: 'https://www.zohoapis.com',
-};
-
 function getDcCode(cookie) {
   if (!cookie || typeof cookie !== 'string') return 'US';
   const m = /(?:^|;\s*)CROSSCDNCOUNTRY=([^;]+)/i.exec(cookie);
@@ -38,11 +26,6 @@ function getDcCode(cookie) {
 export function resolveCrmWebBaseUrlFromCookie(cookie) {
   const code = getDcCode(cookie);
   return DC_CR_WEB[code] ?? 'https://crm.zoho.com';
-}
-
-export function resolveZohoApisBaseFromCookie(cookie) {
-  const code = getDcCode(cookie);
-  return DC_ZOHOAPIS[code] ?? 'https://www.zohoapis.com';
 }
 
 /** Maps CROSSCDNCOUNTRY (from your Cookie header) to the Books web app host. */
@@ -166,7 +149,7 @@ function functionsListSuccess(data) {
 }
 
 /**
- * Resolves the CRM / zohoapis host and returns the first successful functions list payload.
+ * Resolves the CRM host and returns the first successful functions list payload.
  *
  * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
  * @param {{ baseUrl?: string }} [options]
@@ -176,15 +159,7 @@ export async function fetchCrmFunctionsList(normalized, options = {}) {
   const crmWebBase = (
     options.baseUrl || resolveCrmWebBaseUrlFromCookie(normalized.cookie)
   ).replace(/\/$/, '');
-  const apisBase = resolveZohoApisBaseFromCookie(normalized.cookie).replace(
-    /\/$/,
-    '',
-  );
-
-  /** Web CRM first (cookie session); then DC API host if different (AU/EU often need zohoapis.*). */
-  const uniqueBases = options.baseUrl
-    ? [crmWebBase]
-    : [...new Set([crmWebBase, apisBase])];
+  const uniqueBases = [crmWebBase];
 
   const orgId = normalized.xCrmOrg;
   const paths = candidateFunctionListPaths(orgId);
@@ -398,13 +373,7 @@ export async function fetchCrmWorkflowRulesPage(
   const crmWebBase = (
     options.baseUrl || resolveCrmWebBaseUrlFromCookie(normalized.cookie)
   ).replace(/\/$/, '');
-  const apisBase = resolveZohoApisBaseFromCookie(normalized.cookie).replace(
-    /\/$/,
-    '',
-  );
-  const uniqueBases = options.baseUrl
-    ? [crmWebBase]
-    : [...new Set([crmWebBase, apisBase])];
+  const uniqueBases = [crmWebBase];
 
   let lastErr = /** @type {Error & { detail?: unknown; crmBaseUrl?: string }} */ (
     new Error('No workflow rules fetch attempts')
@@ -561,13 +530,7 @@ export async function fetchCrmSchedulesPage(
   const crmWebBase = (
     options.baseUrl || resolveCrmWebBaseUrlFromCookie(normalized.cookie)
   ).replace(/\/$/, '');
-  const apisBase = resolveZohoApisBaseFromCookie(normalized.cookie).replace(
-    /\/$/,
-    '',
-  );
-  const uniqueBases = options.baseUrl
-    ? [crmWebBase]
-    : [...new Set([crmWebBase, apisBase])];
+  const uniqueBases = [crmWebBase];
 
   let lastErr = /** @type {Error & { detail?: unknown; crmBaseUrl?: string }} */ (
     new Error('No schedules fetch attempts')

@@ -208,6 +208,18 @@
               "userLabel": "Schedules",
               "implementation": "available",
               "backendJobId": "crm_schedules"
+            },
+            {
+              "id": "Modules",
+              "userLabel": "Modules",
+              "implementation": "waitlist",
+              "backendJobId": "crm_Modules",
+              "waitlistBehavior": {
+                "ui": "visible",
+                "primaryControl": "Join waitlist",
+                "secondaryCopy": "Get notified when CRM Modules export is ready.",
+                "blocksDownload": true
+              }
             }
           ]
         },
