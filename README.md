@@ -1,56 +1,152 @@
-# zoho-metadata
+# Zoho Metadata Exporter
 
-## Purpose
+A web app that helps end users and developers quickly back up Zoho instance metadata—functions, workflows, schedules, and more—as downloadable, versionable files.
 
-A set of scripts used to work with the unofficial, unpublished, and unsupported Zoho Metadata APIs. Use at your own risk, you have been warned!
+This README is a general overview. For step-by-step setup, session details, deployment options, and troubleshooting, see the **[project wiki](https://github.com/IbyG/zoho-Apps-Scripts-Workflows-Backup/wiki)**.
 
-## Setup
+---
 
-After you clone the repo, install the required packages using yarn
-```
-yarn install
+## What is it?
+
+**Zoho Metadata Exporter** is a browser-based tool for exporting structural metadata from your Zoho apps (for example **CRM** and **Books**). Instead of copying configuration by hand, you:
+
+1. Connect using your active Zoho session
+2. Choose which data types to export
+3. Download packaged archives you can store, diff, or commit to source control
+
+The app uses unofficial Zoho metadata APIs. Use at your own risk in non-production or with appropriate caution.
+
+---
+
+## Why was it built?
+
+Zoho does not provide a built-in way to export metadata to code **manually and at scale**. Functions, workflows, and related configuration live inside the product UI, which makes backups, audits, and environment comparisons difficult.
+
+This project fills that gap: one session, a few clicks, and structured exports per Zoho system.
+
+---
+
+## Quick start
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (LTS recommended)
+- npm
+
+### Local development
+
+From the repository root:
+
+```bash
+cd web
+npm install
+npm run dev
 ```
 
-The unofficial api does have any authentication method that we can leverage, so we need to authenticate via the web application and use the credentials from the browser to run the scripts. The bad news is that you need to manually capture the values from the javascript console. The good news is that these credentials are not hard to get and rarely expire. As a reminder, it is not a good security practice to keep these types of credentials stored on your machine.
+Open the URL shown in the terminal (typically `http://localhost:5173`).
 
-This is one of many ways to get these credentials, these instructions are for Firefox, but should work with Chrome as well:
+To preview a production build:
 
-  1) Create a .env file in the root directory of the project and add these variables: 
-```
-    XZCSRFTOKEN=
-    XCRMORG=
-    COOKIE=
-```
-  2) Login to Zoho CRM
-  2) Open the Javascript Console (right click > inspect is quick way)
-  3) Navigate to Setup > Developer Space > Functions in Zoho CRM
-  4) Go the the Network tab of the console and search for https://crm.zoho.com/crm/v2/settings/functions
-  5) Right Click on the request and go to Copy > Copy Request Headers
-  6) Paste the headers into a new text file
-  7) Copy paste the corresponding values from the Request Headers to the .env file
-```
-    XZCSRFTOKEN=<X-ZCSRF-TOKEN> (crmcsrfparam=234j534lds...)
-    XCRMORG=<X-CRM-ORG> (987654321)
-    COOKIE=<Cookie> (_iamadt=cdc9c6b1b2e...)
+```bash
+npm run build
+npm run preview
 ```
 
-You can test your setup steps using:
+### Docker
+
+You can also run the app via Docker. See the **[wiki — Docker deployment](https://github.com/IbyG/zoho-Apps-Scripts-Workflows-Backup/wiki)** for image build steps, environment variables, and hosting notes.
+
+---
+
+## How to use
+
+You need an **active Zoho session** in your browser (logged into the Zoho apps you want to export from). The exporter does not replace Zoho login—it reuses session details from that browser session.
+
+### 1. Open the export screen
+
+After the app is running, you will see the main export view:
+
+![Main export screen — session panel and data context selection](docs/screenshots/01-main-screen.png)
+
+*Add screenshot: `docs/screenshots/01-main-screen.png`*
+
+### 2. Validate your session
+
+Enter your **Organization ID**, **CSRF token**, and **Cookie** from your logged-in Zoho session, then click **Validate Session**.
+
+For where to find these values, cookie lifetime, and validation behavior, see the wiki:
+
+**[Validate session (wiki)](https://github.com/IbyG/zoho-Apps-Scripts-Workflows-Backup/wiki/Validate-Session)**
+
+### 3. Select data contexts
+
+Choose the Zoho systems and data types you want to download (for example CRM Functions, CRM Workflows, Books Functions). Only options marked **Available** can be exported; others may appear as **In Development**.
+
+![Select data contexts to export](docs/screenshots/02-select-data-contexts.png)
+
+*Add screenshot: `docs/screenshots/02-select-data-contexts.png`*
+
+Use **Select All Available** or pick individual rows. Optional: open **Settings** to customize ZIP file naming patterns.
+
+### 4. Export
+
+Click **Export**. When processing finishes, your browser downloads one or more ZIP files—typically **one archive per selected export per system** (for example separate files for CRM Functions and CRM Workflows).
+
+![Export in progress or completed download](docs/screenshots/03-export-download.png)
+
+*Add screenshot: `docs/screenshots/03-export-download.png`*
+
+---
+
+## What you get
+
+Each download is a ZIP archive. Inside you will find:
+
+| Content | Description |
+|--------|-------------|
+| **Per-item `.json` files** | Full API payload for each function, workflow, schedule, etc. |
+| **Per-item `.txt` files** | Human-readable summary of the same item |
+| **Aggregate JSON** | A rollup file (for example `_AllWorkflows.json`) listing everything exported in that job |
+
+Example layout after exporting CRM Workflows and Books Functions:
+
 ```
-yarn run crm:test:auth
+Zoho-CRM-Workflows-Export-2026-06-13.zip
+  workflows/
+    _AllWorkflows.json
+    ModuleName-WorkflowName-123456.json
+    ModuleName-WorkflowName-123456.txt
+    ...
+
+Zoho-Books-Functions-Export-2026-06-13.zip
+  functions/
+    _AllFunctions.json
+    ...
 ```
 
-## CRM Commands
+Exact names depend on your **Settings** ZIP naming patterns and which contexts you selected.
 
-### Fetch All Functions
-```
-yarn run crm:functions:fetch
-```
-Creates **_AllFunctions.json** with all functions and metadata. Also generates a file for each function with the name **\<Module Name\>-\<function name\>.ds** along with comments containing some useful metadata values.
+---
 
-All files stored in the *functions* directory which is created when first run.
+## Screenshots
 
-### Fetch Latest Backup Files
-```
-yarn run crm:backups:fetch
-```
-Downloads all of the latest backup files and puts them in the *backups* directory with naming convention: YYYYMMDD_Data_###.zip for data files and YYYYMMDD_Attachments_###.zip. The date in the file prefix is the expiration date of the files' availability.
+Place project screenshots under `docs/screenshots/` and update the paths above if you use different filenames.
+
+| File | Purpose |
+|------|---------|
+| `docs/screenshots/01-main-screen.png` | Main UI after opening the app |
+| `docs/screenshots/02-select-data-contexts.png` | Data context / system selection |
+| `docs/screenshots/03-export-download.png` | Export action or resulting download |
+
+---
+
+## Further reading
+
+- **[Project wiki](https://github.com/IbyG/zoho-Apps-Scripts-Workflows-Backup/wiki)** — detailed usage, session setup, Docker, and FAQ
+- **`Maintenance-Documentation/`** — guides for contributors (adding export options, icons, etc.)
+
+---
+
+## License
+
+MIT — see repository license file for details.
