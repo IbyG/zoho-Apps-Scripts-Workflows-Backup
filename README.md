@@ -68,7 +68,6 @@ After the app is running, you will see the main export view:
 
 ![Main export screen — session panel and data context selection](docs/screenshots/01-main-screen.png)
 
-*Add screenshot: `docs/screenshots/01-main-screen.png`*
 
 ### 2. Validate your session
 
@@ -84,17 +83,12 @@ Choose the Zoho systems and data types you want to download (for example CRM Fun
 
 ![Select data contexts to export](docs/screenshots/02-select-data-contexts.png)
 
-*Add screenshot: `docs/screenshots/02-select-data-contexts.png`*
 
 Use **Select All Available** or pick individual rows. Optional: open **Settings** to customize ZIP file naming patterns.
 
 ### 4. Export
 
 Click **Export**. When processing finishes, your browser downloads one or more ZIP files—typically **one archive per selected export per system** (for example separate files for CRM Functions and CRM Workflows).
-
-![Export in progress or completed download](docs/screenshots/03-export-download.png)
-
-*Add screenshot: `docs/screenshots/03-export-download.png`*
 
 ---
 
