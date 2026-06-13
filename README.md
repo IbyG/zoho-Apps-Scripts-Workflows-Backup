@@ -52,9 +52,52 @@ npm run build
 npm run preview
 ```
 
-### Docker
+Open the URL shown in the terminal (typically `http://localhost:4173`).
 
-You can also run the app via Docker. See the **[wiki — Docker deployment](https://github.com/IbyG/zoho-Apps-Scripts-Workflows-Backup/wiki)** for image build steps, environment variables, and hosting notes.
+> **Port note:** Vite uses **5173** for the dev server (`npm run dev`) and **4173** for the preview server (`npm run preview`). Docker runs the production build via preview, so the container listens on **4173**.
+
+### Docker deployment
+
+Deploy on a server with [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/) installed.
+
+From the repository root:
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://<server-ip>:4173` in your browser.
+
+The container serves a **production build** with `vite preview`, which also powers the `/api/*` routes (session validation and ZIP exports). No server-side Zoho credentials are required—users enter session details in the UI.
+
+#### Custom host port
+
+To expose the app on a different port on the host (for example **8080**):
+
+```bash
+HOST_PORT=8080 docker compose up -d --build
+```
+
+Or create a `.env` file next to `docker-compose.yml`:
+
+```env
+HOST_PORT=8080
+```
+
+#### Useful commands
+
+```bash
+docker compose logs -f          # follow container logs
+docker compose ps               # status and health
+docker compose down             # stop and remove the container
+docker compose up -d --build    # rebuild after pulling updates
+```
+
+#### Production notes
+
+- The container must be able to reach Zoho APIs over HTTPS (regional CRM/Books hosts).
+- For HTTPS in production, put a reverse proxy (nginx, Caddy, etc.) in front of the container and proxy to port **4173**.
+- Session setup and validation behavior are unchanged from local use—see the **[Validate session (wiki)](https://github.com/IbyG/zoho-Apps-Scripts-Workflows-Backup/wiki/Validate-Session)**.
 
 ---
 
