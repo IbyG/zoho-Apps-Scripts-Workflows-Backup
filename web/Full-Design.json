@@ -165,7 +165,7 @@
       "selectionModel": {
         "type": "matrix",
         "jobKeyPattern": "{{systemId}}:{{jobId}}",
-        "examples": ["crm:functions", "crm:workflows", "books:functions", "books:webhooks"],
+        "examples": ["crm:client_scripts", "crm:functions", "crm:workflows", "books:functions", "books:webhooks"],
         "rules": [
           "User may select any combination of jobs across systems.",
           "Only jobs with implementation === \"available\" participate in Download.",
@@ -191,6 +191,12 @@
           "displayName": "Zoho CRM",
           "iconPath": "/icons/crm.svg",
           "jobs": [
+            {
+              "id": "client_scripts",
+              "userLabel": "Client Scripts",
+              "implementation": "available",
+              "backendJobId": "crm_client_scripts"
+            },
             {
               "id": "functions",
               "userLabel": "Functions",
@@ -314,6 +320,11 @@
     "developerRegistry": {
       "description": "Internal mapping from backendJobId to scripts and HTTP details; not exposed in the UI.",
       "example": [
+        {
+          "backendJobId": "crm_client_scripts",
+          "systemId": "crm",
+          "scriptPath": "crm/fetchAllClientScripts.js"
+        },
         {
           "backendJobId": "crm_functions",
           "systemId": "crm",

@@ -593,6 +593,242 @@ export async function fetchCrmSchedulesPage(
 }
 
 /**
+ * @param {string} orgId
+ */
+export function candidateClientScriptPagesListPaths(orgId) {
+  return [
+    '/crm/v2.2/settings/cscript_pages',
+    `/crm/org${orgId}/v2.2/settings/cscript_pages`,
+  ];
+}
+
+/**
+ * @param {string} orgId
+ * @param {string} pageUuid
+ */
+export function candidateClientScriptSnippetsListPaths(orgId, pageUuid) {
+  const q = encodeURIComponent(pageUuid);
+  return [
+    `/crm/v2.2/settings/cscript_snippets?cscript_page_uuid=${q}`,
+    `/crm/v2.2/settings/cscript_snippets?page_uuid=${q}`,
+    `/crm/v2.2/settings/cscript_pages/${q}/cscript_snippets`,
+    `/crm/org${orgId}/v2.2/settings/cscript_snippets?cscript_page_uuid=${q}`,
+  ];
+}
+
+/**
+ * @param {string} orgId
+ */
+export function candidateClientScriptSnippetsAllListPaths(orgId) {
+  return [
+    '/crm/v2.2/settings/cscript_snippets',
+    `/crm/org${orgId}/v2.2/settings/cscript_snippets`,
+  ];
+}
+
+/**
+ * @param {string} orgId
+ * @param {string} snippetUuid
+ */
+export function candidateClientScriptSnippetDetailPaths(orgId, snippetUuid) {
+  const id = encodeURIComponent(snippetUuid);
+  return [
+    `/crm/v2.2/settings/cscript_snippets/${id}`,
+    `/crm/org${orgId}/v2.2/settings/cscript_snippets/${id}`,
+  ];
+}
+
+function clientScriptPagesListSuccess(data) {
+  return (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray(data.cscript_pages) &&
+    data.status !== 'error'
+  );
+}
+
+function clientScriptSnippetsListSuccess(data) {
+  return (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray(data.cscript_snippets) &&
+    data.status !== 'error'
+  );
+}
+
+/**
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
+ * @param {{ baseUrl?: string }} [options]
+ * @returns {Promise<{ base: string, cscript_pages: object[], configuration?: object }>}
+ */
+export async function fetchCrmClientScriptPages(normalized, options = {}) {
+  const orgId = normalized.xCrmOrg;
+  const paths = candidateClientScriptPagesListPaths(orgId);
+  const crmWebBase = (
+    options.baseUrl || resolveCrmWebBaseUrlFromCookie(normalized.cookie)
+  ).replace(/\/$/, '');
+
+  let lastErr = /** @type {Error & { detail?: unknown; crmBaseUrl?: string }} */ (
+    new Error('No client script pages fetch attempts')
+  );
+
+  for (const path of paths) {
+    const url = `${crmWebBase}${path}`;
+    try {
+      const res = await fetch(url, { method: 'GET', headers: buildCrmHeaders(normalized) });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        const err = new Error(`Client script pages request failed (${res.status})`);
+        err.detail = data || text;
+        err.crmBaseUrl = crmWebBase;
+        err.attemptUrl = url;
+        lastErr = err;
+        continue;
+      }
+
+      if (data && data.status === 'error') {
+        const err = new Error(data.message || 'API returned status error');
+        err.detail = data;
+        err.crmBaseUrl = crmWebBase;
+        err.attemptUrl = url;
+        lastErr = err;
+        continue;
+      }
+
+      if (clientScriptPagesListSuccess(data)) {
+        return {
+          base: crmWebBase,
+          cscript_pages: data.cscript_pages || [],
+          configuration: data.cscript_pages_configuration,
+        };
+      }
+
+      const err = new Error('Unexpected response from CRM (client script pages)');
+      err.detail = data || text;
+      err.crmBaseUrl = crmWebBase;
+      err.attemptUrl = url;
+      lastErr = err;
+    } catch (e) {
+      const err = /** @type {Error & { detail?: unknown; attemptUrl?: string }} */ (
+        e instanceof Error ? e : new Error(String(e))
+      );
+      err.crmBaseUrl = crmWebBase;
+      err.attemptUrl = url;
+      lastErr = err;
+    }
+  }
+
+  throw lastErr;
+}
+
+/**
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
+ * @param {string} base
+ * @param {string[]} paths
+ * @returns {Promise<object[] | null>}
+ */
+async function tryFetchClientScriptSnippetsList(normalized, base, paths) {
+  for (const path of paths) {
+    const url = `${base.replace(/\/$/, '')}${path}`;
+    try {
+      const res = await fetch(url, { method: 'GET', headers: buildCrmHeaders(normalized) });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        continue;
+      }
+      if (!res.ok || (data && data.status === 'error')) continue;
+      if (clientScriptSnippetsListSuccess(data)) {
+        return data.cscript_snippets || [];
+      }
+    } catch {
+      // try next path
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
+ * @param {string} base
+ * @param {object[]} pages
+ * @returns {Promise<object[]>}
+ */
+export async function fetchAllCrmClientScriptSnippets(normalized, base, pages) {
+  const orgId = normalized.xCrmOrg;
+  const allPaths = candidateClientScriptSnippetsAllListPaths(orgId);
+  const globalList = await tryFetchClientScriptSnippetsList(normalized, base, allPaths);
+  if (globalList && globalList.length) {
+    return globalList;
+  }
+
+  /** @type {object[]} */
+  const snippets = [];
+  const seen = new Set();
+
+  for (const page of pages) {
+    const pageUuid = page?.uuid;
+    if (!pageUuid) continue;
+    const pagePaths = candidateClientScriptSnippetsListPaths(orgId, pageUuid);
+    const pageList = await tryFetchClientScriptSnippetsList(normalized, base, pagePaths);
+    if (!pageList) continue;
+    for (const snippet of pageList) {
+      const key = snippet?.uuid || snippet?.id;
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      snippets.push(snippet);
+    }
+  }
+
+  return snippets;
+}
+
+/**
+ * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
+ * @param {string} base
+ * @param {string} snippetUuid
+ * @returns {Promise<object | null>}
+ */
+export async function fetchCrmClientScriptSnippetDetail(
+  normalized,
+  base,
+  snippetUuid,
+) {
+  const orgId = normalized.xCrmOrg;
+  const paths = candidateClientScriptSnippetDetailPaths(orgId, snippetUuid);
+
+  for (const path of paths) {
+    const url = `${base.replace(/\/$/, '')}${path}`;
+    try {
+      const res = await fetch(url, { method: 'GET', headers: buildCrmHeaders(normalized) });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        continue;
+      }
+      if (!res.ok || (data && data.status === 'error')) continue;
+      const snippet = data.cscript_snippets?.[0];
+      if (snippet && typeof snippet === 'object') return snippet;
+    } catch {
+      // try next path
+    }
+  }
+
+  return null;
+}
+
+/**
  * Walks all pages and returns every schedule row.
  *
  * @param {ReturnType<typeof normalizeCrmCredentials>} normalized
